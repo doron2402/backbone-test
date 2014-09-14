@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>backbone - test</title>
+        <link rel="stylesheet" type="text/css" href="vendors/bootstrap/dist/css/bootstrap.min.css">
+    </head>
+    <body>
+        <div class="container" id="main-content">
+            <h1>Backbone</h1>
+            <hr>
+            <div class="page"></div>
+        </div>
+
+        <script type="text/template" id="users-list-template">
+            <a href="#/users/new" class="btn btn-primary">New User</a>
+            <hr />
+            <table class="table striped">
+                <thead>
+                    <tr>
+                        <th>First Name</th>
+                        <th>Last Name</th>
+                        <th>Age</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <% _.each(users, function(user) { %>
+                        <% console.log(user); %>
+                        <tr>
+                            <td><%- user.get('firstname') %></td>
+                            <td><%- user.get('lastname') %></td>
+                            <td><%- user.get('age') %></td>
+                            <td><a class="btn" href="#/users/edit/<%= user.id %>">Edit</a></td>
+                        </tr>
+                    <% }); %>
+                </tbody>
+            </table>
+        </script>
+
+        <script type="text/template" id="users-edit-temlpate">
+            <form class="form edit-user-form">
+
+                <legend><%- user ? 'Edit' : 'Create' %> Users</legend>
+                <div class="input-group">
+                <lable>First Name</label>
+                <input type="text" name="firstname" value="<%- user ? user.get('firstname') : '' %>" />
+                <lable>Last Name</label>
+                <input type="text" name="lastname" value="<%- user ? user.get('lastname') : '' %>" />
+                <lable>Age</label>
+                <input type="text" name="age" value="<%- user ? user.get('age') : '' %>" />
+                <% if(user) { %>
+                    <input type="hidden" name="id" value="<%= user.id %>" />
+                    <button id="btn-delete-user" class="btn btn-danger delete">Delete</button>
+                <% } %>
+                <hr />
+                <button type="submit" class="btn"><%- user ? 'Update' : 'Create' %></button>
+                </div>
+
+            </form>
+        </script>
+
+        <script type="text/template" id="pages-template">
+            <div class="row">
+                <h3><%- header %></h3>
+                <p><%- body %></p>
+            </div>
+        </script>
+
+
+        <script data-main="app/app.js" src="app/require.js"></script>
+
+        <script type="text/javascript" src="vendors/jquery/dist/jquery.min.js"></script>
+        <script type="text/javascript" src="vendors/underscore/underscore-min.js"></script>
+        <script type="text/javascript" src="vendors/backbone/backbone.js"></script>
+
+        <script type="text/javascript">
+            //Configuration
+            window.A = {
+                Views: {},
+                Router: {},
+                Controllers: {},
+                Models: {},
+                Collections: {},
+                Config: {
+                    url: 'http://backbonejs-beginner.herokuapp.com'
+                }
+            };
+
+            $.ajaxPrefilter(function(options, originalOptions, jqXHR) {
+                options.url = A.Config.url + options.url;
+            });
+
+            $.fn.serializeObject = function() {
+                var o = {};
+                var a = this.serializeArray();
+                $.each(a, function() {
+                    if (o[this.name] !== undefined) {
+                        if (!o[this.name].push) {
+                            o[this.name] = [o[this.name]];
+                        }
+                        o[this.name].push(this.value || '');
+                    }else {
+                        o[this.name] = this.value || '';
+                    }
+                });
+                return o;
+            };
+
+            // Models
+            A.Models.User = Backbone.Model.extend({
+                urlRoot: '/users'
+            });
+
+            A.Models.Movie = Backbone.Model.extend({
+
+            });
+
+
+            // Collections
+            A.Collections.Users = Backbone.Collection.extend({
+                url: '/users'
+            });
+
+            A.Collections.Movies = Backbone.Collection.extend({
+                url: '/movies'
+            });
+
+            A.Views.Users = Backbone.View.extend({
+                el: '.page',
+                events: {
+                    "scroll": "scroll",
+                },
+                scroll: function(){
+                    console.log( "scrolling..." );
+                },
+                initialize: function() {
+                    console.log('init..');
+                },
+                render: function () {
+                    var self = this;
+                    var usersCollection = new A.Collections.Users();
+                    usersCollection.fetch({
+                        success: function(users) {
+                            var temp = _.template($('#users-list-template').html());
+                            temp = temp({users: users.models});
+                            self.$el.html(temp);
+                        },
+                        error: function(err) {
+                            console.log('err');
+                        }
+                    });
+
+                }
+            });
+
+            A.Views.UsersEdit = A.Views.Users.extend({
+                templateDiv: '#users-edit-temlpate',
+                user_id: null,
+                events: {
+                    'submit .edit-user-form': 'saveUser',
+                    'click #btn-delete-user': 'delUser'
+                },
+                delUser: function(ev) {
+                    ev.preventDefault();
+                    console.log(this.userModel);
+                    this.userModel.destroy({
+                        success: function() {
+                            router.navigate('users', {trigger: true});
+                        }
+                    })
+                },
+                saveUser: function(ev) {
+                    var self = this;
+                    ev.preventDefault();
+                    var userDetail = $(ev.currentTarget).serializeObject();
+
+                    self.userModel = new A.Models.User();
+                    self.userModel.save(userDetail, {
+                        success: function(user) {
+                            router.navigate('users', {trigger: true});
+                        }
+                    });
+                },
+                render: function(args) {
+                    if (args && args.user_id) {
+                        this.user_id = args.user_id;
+                        this.userModel = new A.Models.User({id: this.user_id});
+                        this.renderEditUserForm();
+                    } else {
+                        this.renderNewUserForm();
+                    }
+
+                },
+                renderNewUserForm: function() {
+                    var self = this;
+                    var temp = _.template($(self.templateDiv).html());
+                    temp = temp({user: null});
+                    self.$el.html(temp);
+                },
+                renderEditUserForm: function() {
+                    var self = this;
+
+                    var temp = _.template($(self.templateDiv).html());
+                    self.userModel.fetch({
+                        success: function(user) {
+                            temp = temp({user: user});
+                            self.$el.html(temp);
+                        }
+                    });
+                }
+             });
+
+
+
+            A.Views.Pages = Backbone.View.extend({
+                el: '.page',
+                page: 'home',
+                template: '#pages-template',
+                header: null,
+                body: null,
+                render: function(args) {
+                    var self = this;
+                    if (args.page) {
+                        self.page = args.page;
+                    }
+                    var template = _.template($(self.template).html());
+                    template = template(self.getPageContent(self.page));
+                    self.$el.html(template);
+                },
+                getPageContent: function(page) {
+                    var obj = {};
+                    switch(page) {
+                        case 'about':
+                            obj = {
+                                header: 'About Page',
+                                body: 'this is about page...'
+                            };
+                            break;
+                        default:
+                            obj = {
+                                header: 'Home Page',
+                                body: 'bla bla....home page...'
+                            };
+                            break;
+                    }
+                    return obj;
+                }
+            });
+
+
+        A.Router = Backbone.Router.extend({
+            routes: {
+                '': 'home',
+                'home': 'home',
+                'users/new': 'newUser',
+                'users/:id': 'getUserById',
+                'users/edit/:id': 'editUserId',
+                'users': 'getAllUsers',
+                'about': 'getAboutPage'
+            }
+        });
+
+
+        var router = new A.Router();
+        //Pages
+        router.on('route:home', function() {
+            var homePage = new A.Views.Pages();
+            homePage.render({page: 'home'});
+        }).on('route:getAboutPage', function() {
+            var aboutPage = new A.Views.Pages();
+            aboutPage.render({page: 'about'});
+        }).on('route:newUser', function() {
+            var userNewView = new A.Views.UsersEdit();
+            userNewView.render();
+        }).on('route:getUserById', function(id) {
+            console.log('get user: ' + id);
+        }).on('route:getAllUsers', function() {
+            var userList = new A.Views.Users();
+            userList.render();
+        }).on('route:editUserId', function(id) {
+            var userEditView = new A.Views.UsersEdit();
+            userEditView.render({user_id: id});
+        });
+
+        Backbone.history.start();
+        </script>
+
+    </body>
+</html>
